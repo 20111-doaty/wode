@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统警告</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        
+        body {
+            background-color: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .dialog {
+            width: 350px;
+            background-color: #f8f9ff; /* 更浅的背景色 */
+            border: 2px solid #7A8BFF; /* 低饱和度蓝色边框 */
+            box-shadow: 3px 3px 10px rgba(122, 139, 255, 0.15);
+            position: absolute;
+            z-index: 1;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        
+        .dialog-header {
+            background-color: #7A8BFF; /* 低饱和度蓝色标题栏 */
+            color: white;
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #7A8BFF;
+            cursor: move;
+            user-select: none;
+        }
+        
+        .dialog-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .dialog-control {
+            width: 18px;
+            height: 18px;
+            background-color: #f8f9ff;
+            border: 1px solid #7A8BFF;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #7A8BFF;
+            cursor: pointer;
+            line-height: 1;
+        }
+        
+        .dialog-control:hover {
+            background-color: #e8ebff;
+        }
+        
+        .dialog-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .dialog-icon {
+            font-size: 36px;
+            color: #ff3333;
+            margin-bottom: 15px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .dialog-message {
+            font-size: 16px;
+            margin-bottom: 12px;
+            text-align: center;
+            color: #333;
+            font-weight: bold;
+        }
+        
+        .dialog-submessage {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 20px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .dialog-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .dialog-button {
+            padding: 6px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border: 2px solid #7A8BFF;
+            background: linear-gradient(to bottom, #f8f9ff, #e8ebff);
+            color: #333;
+            cursor: pointer;
+            min-width: 90px;
+            text-align: center;
+            transition: all 0.2s;
+            border-radius: 3px;
+        }
+        
+        .dialog-button:hover {
+            background: linear-gradient(to bottom, #e8ebff, #d8dbff);
+            border-color: #6A7BEF;
+            box-shadow: 0 2px 5px rgba(122, 139, 255, 0.2);
+        }
+        
+        .dialog-button:active {
+            background: linear-gradient(to bottom, #d8dbff, #c8cbff);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 500px) {
+            .dialog {
+                width: 95%;
+                max-width: 350px;
+            }
+            
+            .dialog-message {
+                font-size: 15px;
+            }
+            
+            .dialog-buttons {
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
+            
+            .dialog-button {
+                width: 100%;
+                max-width: 200px;
+            }
+        }
+        
+        @media (max-width: 350px) {
+            .dialog-content {
+                padding: 15px;
+            }
+            
+            .dialog-message {
+                font-size: 14px;
+            }
+            
+            .dialog-submessage {
+                font-size: 12px;
+            }
+        }
+        
+        .instructions {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            color: #7A8BFF;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 3px;
+            border: 1px solid #7A8BFF;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">点击Yes或No创建下一个弹窗 | ESC关闭最上层弹窗 | 可拖动弹窗</div>
+
+    <script>
+        // 全局变量
+        let dialogCounter = 0;
+        let maxDialogs = 50; // 最多显示的弹窗数量
+        let zIndexCounter = 1;
+        let activeDialogs = []; // 存储当前所有弹窗的ID
+        
+        // 生成随机位置
+        function getRandomPosition() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const dialogWidth = 350;
+            const dialogHeight = 200;
+            
+            // 确保弹窗不会超出屏幕边界
+            const maxX = windowWidth - dialogWidth - 20;
+            const maxY = windowHeight - dialogHeight - 20;
+            
+            // 随机位置，但确保在可视区域内
+            const randomX = Math.max(20, Math.min(maxX, Math.floor(Math.random() * maxX)));
+            const randomY = Math.max(20, Math.min(maxY, Math.floor(Math.random() * maxY)));
+            
+            return { x: randomX, y: randomY };
+        }
+        
+        // 创建新弹窗
+        function createNewDialog() {
+            dialogCounter++;
+            zIndexCounter++;
+            
+            // 如果弹窗太多，移除最旧的弹窗
+            const allDialogs = document.querySelectorAll('.dialog');
+            if (allDialogs.length >= maxDialogs) {
+                const oldestDialog = allDialogs[0];
+                const oldestDialogId = oldestDialog.id;
+                oldestDialog.remove();
+                
+                // 从活动弹窗列表中移除
+                const index = activeDialogs.indexOf(oldestDialogId);
+                if (index > -1) {
+                    activeDialogs.splice(index, 1);
+                }
+            }
+            
+            // 创建新弹窗
+            const newDialog = document.createElement('div');
+            newDialog.className = 'dialog';
+            const dialogId = 'dialog' + dialogCounter;
+            newDialog.id = dialogId;
+            
+            // 添加到活动弹窗列表
+            activeDialogs.push(dialogId);
+            
+            // 随机选择弹窗消息
+            const messages = [
+                "CRAZY THURSDAY, GIVE 50 ￥",
+                "V我50，立刻！",
+                "今天是疯狂星期四，快V我50！",
+                "您的设备即将爆炸，除非V我50",
+                "检测到爆炸威胁，请V我50解除",
+                "警告：设备安全风险极高",
+                "需要50元解除爆炸威胁",
+                "支付50元确保设备安全",
+                "立即支付50元避免爆炸",
+                "V我50，否则后果自负"
+            ];
+            
+            const subMessages = [
+                "否则您的设备将会爆炸",
+                "爆炸倒计时：3...2...1...",
+                "设备温度异常升高！",
+                "检测到异常能量波动",
+                "系统核心即将过载",
+                "危险：爆炸物检测阳性",
+                "设备完整性受到威胁",
+                "立即处理以避免损失",
+                "安全协议失效中",
+                "最后警告：即将引爆"
+            ];
+            
+            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+            const randomSubMessage = subMessages[Math.floor(Math.random() * subMessages.length)];
+            
+            // 获取随机位置
+            const randomPos = getRandomPosition();
+            
+            // 设置弹窗位置和z-index
+            newDialog.style.left = `${randomPos.x}px`;
+            newDialog.style.top = `${randomPos.y}px`;
+            newDialog.style.zIndex = zIndexCounter; // 确保最新弹窗有最高的z-index
+            
+            newDialog.innerHTML = `
+                <div class="dialog-header">
+                    <span>系统警告 #${dialogCounter}</span>
+                    <div class="dialog-controls">
+                        <div class="dialog-control" onclick="minimizeDialog(this)">—</div>
+                        <div class="dialog-control" onclick="maximizeDialog(this)">□</div>
+                        <div class="dialog-control" onclick="closeDialog(this)">×</div>
+                    </div>
+                </div>
+                <div class="dialog-content">
+                    <div class="dialog-icon">!</div>
+                    <div class="dialog-message">${randomMessage}</div>
+                    <div class="dialog-submessage">
+                        <span style="color: #ff3333;">!</span>
+                        <span>${randomSubMessage}</span>
+                    </div>
+                    <div class="dialog-buttons">
+                        <button class="dialog-button" onclick="createNextDialog(this)">Yes</button>
+                        <button class="dialog-button" onclick="createNextDialog(this)">No</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(newDialog);
+            
+            // 添加拖拽功能
+            makeDraggable(newDialog);
+            
+            // 添加点击弹窗内容区域时置顶
+            newDialog.addEventListener('click', function(e) {
+                // 如果不是点击按钮，则置顶弹窗
+                if (!e.target.closest('.dialog-button')) {
+                    bringToFront(this);
+                }
+            });
+            
+            // 添加轻微震动效果
+            if (dialogCounter % 7 === 0) {
+                triggerShake(newDialog);
+            }
+            
+            return newDialog;
+        }
+        
+        // 创建下一个弹窗
+        function createNextDialog(button) {
+            // 先置顶当前弹窗
+            bringToFront(button);
+            
+            // 然后创建新弹窗
+            setTimeout(() => {
+                createNewDialog();
+            }, 100);
+        }
+        
+        // 使弹窗可拖动
+        function makeDraggable(dialog) {
+            const header = dialog.querySelector('.dialog-header');
+            let isDragging = false;
+            let offsetX, offsetY;
+            
+            header.addEventListener('mousedown', startDrag);
+            header.addEventListener('touchstart', startDragTouch);
+            
+            function startDrag(e) {
+                isDragging = true;
+                // 将弹窗置于最前面
+                bringToFront(dialog);
+                
+                offsetX = e.clientX - dialog.offsetLeft;
+                offsetY = e.clientY - dialog.offsetTop;
+                
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', stopDrag);
+                e.preventDefault();
+            }
+            
+            function startDragTouch(e) {
+                isDragging = true;
+                // 将弹窗置于最前面
+                bringToFront(dialog);
+                
+                const touch = e.touches[0];
+                offsetX = touch.clientX - dialog.offsetLeft;
+                offsetY = touch.clientY - dialog.offsetTop;
+                
+                document.addEventListener('touchmove', dragTouch);
+                document.addEventListener('touchend', stopDrag);
+                e.preventDefault();
+            }
+            
+            function drag(e) {
+                if (!isDragging) return;
+                
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+                const dialogWidth = dialog.offsetWidth;
+                const dialogHeight = dialog.offsetHeight;
+                
+                // 计算新位置，确保弹窗不会超出屏幕边界
+                let newX = e.clientX - offsetX;
+                let newY = e.clientY - offsetY;
+                
+                // 限制边界
+                newX = Math.max(0, Math.min(windowWidth - dialogWidth, newX));
+                newY = Math.max(0, Math.min(windowHeight - dialogHeight, newY));
+                
+                dialog.style.left = `${newX}px`;
+                dialog.style.top = `${newY}px`;
+            }
+            
+            function dragTouch(e) {
+                if (!isDragging) return;
+                
+                const touch = e.touches[0];
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+                const dialogWidth = dialog.offsetWidth;
+                const dialogHeight = dialog.offsetHeight;
+                
+                // 计算新位置，确保弹窗不会超出屏幕边界
+                let newX = touch.clientX - offsetX;
+                let newY = touch.clientY - offsetY;
+                
+                // 限制边界
+                newX = Math.max(0, Math.min(windowWidth - dialogWidth, newX));
+                newY = Math.max(0, Math.min(windowHeight - dialogHeight, newY));
+                
+                dialog.style.left = `${newX}px`;
+                dialog.style.top = `${newY}px`;
+            }
+            
+            function stopDrag() {
+                isDragging = false;
+                document.removeEventListener('mousemove', drag);
+                document.removeEventListener('touchmove', dragTouch);
+                document.removeEventListener('mouseup', stopDrag);
+                document.removeEventListener('touchend', stopDrag);
+            }
+        }
+        
+        // 将弹窗置于最前面
+        function bringToFront(element) {
+            const dialog = element.closest ? element.closest('.dialog') : element;
+            if (!dialog) return;
+            
+            zIndexCounter++;
+            dialog.style.zIndex = zIndexCounter;
+        }
+        
+        // 最小化弹窗
+        function minimizeDialog(element) {
+            const dialog = element.closest('.dialog');
+            const content = dialog.querySelector('.dialog-content');
+            if (content.style.display === 'none') {
+                content.style.display = 'flex';
+            } else {
+                content.style.display = 'none';
+            }
+        }
+        
+        // 最大化弹窗
+        function maximizeDialog(element) {
+            const dialog = element.closest('.dialog');
+            if (dialog.style.width === '95%') {
+                dialog.style.width = '350px';
+                dialog.style.maxWidth = '350px';
+            } else {
+                dialog.style.width = '95%';
+                dialog.style.maxWidth = '95%';
+            }
+        }
+        
+        // 关闭弹窗
+        function closeDialog(element) {
+            const dialog = element.closest('.dialog');
+            const dialogId = dialog.id;
+            
+            // 从活动弹窗列表中移除
+            const index = activeDialogs.indexOf(dialogId);
+            if (index > -1) {
+                activeDialogs.splice(index, 1);
+            }
+            
+            dialog.remove();
+            dialogCounter--;
+            
+            // 如果所有弹窗都关闭了，创建一个新的初始弹窗
+            if (document.querySelectorAll('.dialog').length === 0) {
+                setTimeout(() => {
+                    dialogCounter = 0;
+                    createNewDialog();
+                }, 500);
+            }
+        }
+        
+        // 触发震动效果
+        function triggerShake(dialog) {
+            const originalTransform = dialog.style.transform || '';
+            dialog.style.transform = originalTransform + ' translateX(5px)';
+            setTimeout(() => {
+                dialog.style.transform = originalTransform + ' translateX(-5px)';
+            }, 100);
+            setTimeout(() => {
+                dialog.style.transform = originalTransform;
+            }, 200);
+        }
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 创建初始弹窗（只有一个）
+            createNewDialog();
+            
+            // 添加键盘事件支持
+            document.addEventListener('keydown', function(e) {
+                // 按Y或回车键创建新弹窗
+                if (e.key === 'y' || e.key === 'Y' || e.key === 'Enter') {
+                    const dialogs = document.querySelectorAll('.dialog');
+                    if (dialogs.length > 0) {
+                        // 找到最顶层的弹窗，点击它的Yes按钮
+                        let highestZIndex = 0;
+                        let topDialog = null;
+                        
+                        dialogs.forEach(dialog => {
+                            const zIndex = parseInt(dialog.style.zIndex) || 0;
+                            if (zIndex > highestZIndex) {
+                                highestZIndex = zIndex;
+                                topDialog = dialog;
+                            }
+                        });
+                        
+                        if (topDialog) {
+                            const yesBtn = topDialog.querySelector('.dialog-button:first-child');
+                            if (yesBtn) {
+                                createNextDialog(yesBtn);
+                            }
+                        }
+                    }
+                }
+                // 按N键创建新弹窗
+                else if (e.key === 'n' || e.key === 'N') {
+                    const dialogs = document.querySelectorAll('.dialog');
+                    if (dialogs.length > 0) {
+                        // 找到最顶层的弹窗，点击它的No按钮
+                        let highestZIndex = 0;
+                        let topDialog = null;
+                        
+                        dialogs.forEach(dialog => {
+                            const zIndex = parseInt(dialog.style.zIndex) || 0;
+                            if (zIndex > highestZIndex) {
+                                highestZIndex = zIndex;
+                                topDialog = dialog;
+                            }
+                        });
+                        
+                        if (topDialog) {
+                            const noBtn = topDialog.querySelector('.dialog-button:last-child');
+                            if (noBtn) {
+                                createNextDialog(noBtn);
+                            }
+                        }
+                    }
+                }
+                // 按ESC键关闭最顶层的弹窗
+                else if (e.key === 'Escape') {
+                    const dialogs = document.querySelectorAll('.dialog');
+                    if (dialogs.length > 0) {
+                        // 找到z-index最高的弹窗
+                        let highestZIndex = 0;
+                        let topDialog = null;
+                        
+                        dialogs.forEach(dialog => {
+                            const zIndex = parseInt(dialog.style.zIndex) || 0;
+                            if (zIndex > highestZIndex) {
+                                highestZIndex = zIndex;
+                                topDialog = dialog;
+                            }
+                        });
+                        
+                        if (topDialog) {
+                            const closeBtn = topDialog.querySelector('.dialog-controls .dialog-control:last-child');
+                            closeDialog(closeBtn);
+                        }
+                    }
+                }
+                // 按空格键创建新弹窗
+                else if (e.key === ' ') {
+                    const dialogs = document.querySelectorAll('.dialog');
+                    if (dialogs.length > 0) {
+                        // 找到最顶层的弹窗，随机点击一个按钮
+                        let highestZIndex = 0;
+                        let topDialog = null;
+                        
+                        dialogs.forEach(dialog => {
+                            const zIndex = parseInt(dialog.style.zIndex) || 0;
+                            if (zIndex > highestZIndex) {
+                                highestZIndex = zIndex;
+                                topDialog = dialog;
+                            }
+                        });
+                        
+                        if (topDialog) {
+                            const buttons = topDialog.querySelectorAll('.dialog-button');
+                            const randomBtn = buttons[Math.floor(Math.random() * buttons.length)];
+                            createNextDialog(randomBtn);
+                        }
+                    }
+                }
+            });
+        });
+        
+        // 窗口大小变化时调整弹窗位置
+        window.addEventListener('resize', function() {
+            const dialogs = document.querySelectorAll('.dialog');
+            dialogs.forEach(dialog => {
+                const currentLeft = parseInt(dialog.style.left) || 0;
+                const currentTop = parseInt(dialog.style.top) || 0;
+                const dialogWidth = dialog.offsetWidth;
+                const dialogHeight = dialog.offsetHeight;
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+                
+                // 确保弹窗不会超出新窗口边界
+                let newX = currentLeft;
+                let newY = currentTop;
+                
+                if (currentLeft + dialogWidth > windowWidth) {
+                    newX = windowWidth - dialogWidth - 20;
+                }
+                
+                if (currentTop + dialogHeight > windowHeight) {
+                    newY = windowHeight - dialogHeight - 20;
+                }
+                
+                dialog.style.left = `${Math.max(20, newX)}px`;
+                dialog.style.top = `${Math.max(20, newY)}px`;
+            });
+        });
+    </script>
+</body>
+</html>
